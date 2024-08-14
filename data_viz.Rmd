@@ -1,0 +1,53 @@
+---
+title: "Data Visualization"
+author: "Tyler Kephart"
+date: "2024-08-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+## The instructions say to use the *mtcars* dataset but the graphs show the data and labels from the *mpg* dataset. Therefore, I will use *mpg* dataset to best match the graphs provided in the instructions.
+
+### Question 1. Using the ~~mtcars~~ *mpg* data set and ggplot2, recreate the following graph.
+```{r question1}
+# name plot of displ to hwy to reuse in q2 and q3, hence name q123
+q123 <- ggplot(data = mpg, mapping = aes(x = displ, y = hwy))
+# adding plot points and smoothed mean line without confidence interval (se)
+q123 + geom_point() + geom_smooth(se = FALSE)
+```
+
+### Question 2. Using the ~~mtcars~~ *mpg* data set and ggplot2, recreate the following graph.
+```{r question2}
+# same plot from q1 but with color mapped to drv
+q123 + geom_point(mapping = aes(color = drv)) +
+    geom_smooth(se = FALSE)
+```
+
+
+### Question 3. Using the ~~mtcars~~ *mpg* data set and ggplot2, recreate the following graph.
+```{r question3}
+# same plot as q2 but with linetypes for drv
+q123 + geom_point(mapping = aes(color = drv)) +
+    geom_smooth(mapping = aes(linetype = drv), se = FALSE)
+```
+
+
+### Question 4. Using the ~~mtcars~~ *mpg* data set and ggplot2, recreate the following graph.
+```{r question4}
+# plot cty to hwy mileage points and color on class and jitter them 
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy)) +
+    geom_point(mapping = aes(color = class), position = "jitter")
+```
+
+
+### Question 5. Using the ~~mtcars~~ *mpg* data set and ggplot2, recreate the following graph.
+```{r question5}
+# plot hwy to cyl points as orange triangles and facet on class into 3 rows
+ggplot(data = mpg, mapping = aes(x = hwy, y = cyl)) +
+    geom_point(shape = 17, color = "orange") +
+    facet_wrap(~class, nrow=3)
+```
+

@@ -1,0 +1,74 @@
+---
+title: "Data Analysis"
+author: "Tyler Kephart"
+date: "2024-08-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(nycflights13)
+```
+
+### Question 1. Using the nycflights13 dataset, find all flights that departed in July, August, or September using the helper function between(). 
+```{r question1}
+# filtering to flights that did depart in the months of July, August, and September
+flights %>% 
+    filter(!is.na(dep_time), between(month, 7, 9))
+```
+### Question 2. Using the nycflights13 dataset sort flights to find the 10 flights that flew the furthest. Put them in order of fastest to slowest. 
+```{r question2}
+flights %>% 
+    # bringing distance and air_time forward to see them
+    select(distance, air_time, everything()) %>% 
+    # filtering to max because there are more than 300 flights at max distance
+    filter(distance == max(distance)) %>% 
+    # arranging to air_time, fastest to slowest, showing only top 10
+    arrange(air_time) %>% 
+    head(10)
+```
+### Question 3. Using the nycflights13 dataset, calculate a new variable called "hr_delay" and arrange the flights dataset in order of the arrival delays in hours (longest delays at the top). Put the new variable you created just before the departure time.Hint: use the experimental argument .before. 
+```{r question3}
+flights %>% 
+    # create hr_delay by dividing arr_delay by 60 since it's in minutes
+    mutate(hr_delay = arr_delay/60) %>% 
+    # sort longest delays to shortest
+    arrange(desc(hr_delay)) %>% 
+    # move the hr_delay column in front of dep_time
+    relocate(hr_delay, .before = dep_time)
+```
+### Question 4. Using the nycflights13 dataset, find the most popular destinations (those with more than 2000 flights) and show the destination, the date info, the carrier. Then show just the number of flights for each popular destination.
+```{r question4a}
+# get count of most popular destinations
+pop_dest <- flights %>% 
+                count(dest) %>% 
+                filter(n > 2000)
+# filter to most popular destinations with date and carrier
+flights %>% 
+    filter(dest %in% pop_dest$dest) %>% 
+    distinct(dest, year, month, day, carrier)
+```
+```{r question4b}
+# number of flights for each popular destination
+pop_dest %>% 
+    arrange(desc(n))
+```
+### Question 5.  Using the nycflights13 dataset, find the flight information (flight number, origin, destination, carrier, number of flights in the year, and percent late) for the flight numbers with the highest percentage of arrival delays. Only include the flight numbers that have over 100 flights in the year.
+```{r question5}
+# get count of flight numbers
+flight_nums <- flights %>% 
+                    group_by(flight, origin, dest, carrier) %>% 
+                    summarise(num_flights = n())
+# get count of arrival delays for flight numbers
+flight_late <- flights %>% 
+                    group_by(flight, origin, dest, carrier) %>% 
+                    filter(arr_delay > 0) %>% 
+                    summarise(num_late = n())
+# join them, filter 100+ flights, get percent late, sort highest delay
+full_join(flight_nums, flight_late) %>% 
+    filter(num_flights > 100) %>% 
+    transmute(flight, origin, dest, carrier, num_flights, 
+              perc_late = num_late / num_flights) %>% 
+    arrange(desc(perc_late))
+```

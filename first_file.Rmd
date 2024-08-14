@@ -1,0 +1,76 @@
+---
+title: "First Assignment"
+author: "Tyler Kephart"
+date: "08/03/2024"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Please complete all the tasks listed below. After completing the tasks download the .Rmd file and upload in the peer review item for grading.
+
+# Additionally please write text between the code chunks explaining what each code chunk is about.
+
+1.a bulleted list with sub-bullets under at least one item (10 pt)
+
+* main item 1
+  + sub item 1
+* main item 2
+
+2.a numbered list (10 pt)
+
+1. number 1
+2. number 2
+
+3.some words italicized (5 pt)
+
+*Italy*
+
+4.some words in bold print (5 pt)
+
+**Brave**
+
+5.two levels of headers (10 pt)
+
+## Headband
+
+May be called sweatband.
+
+### Sweatpants
+
+May be called sweats.
+
+6.the results of some R code without showing the code (10 pt)
+
+```{r no_show_code, echo=FALSE}
+1 + 1 < 0
+```
+
+7.a table of text at least 3 columns wide and 3 rows long (10 pt)
+
+| First Col | Second Col | Third Col |
+|-----------|------------|-----------|
+| Row1 Col1 | Row1 Col2  | Row1 Col3 |
+| Row2 Col1 | Row2 Col2  | Row2 Col3 |
+| Row3 Col1 | Row3 Col2  | Row3 Col3 |
+
+8.a plot (show the code that generates the plot) (10 pt)
+
+```{r example_plot}
+x <- 1:10
+y <- 1/x
+plot(x,y)
+```
+
+9.your session info (as output from R) (10 pt)
+
+```{r session_info}
+sessionInfo()
+```
+
+10.Execution of .Rmd file (10 pt)
+
+11.Upload and execution of knitted pdf (10 pt)
+
