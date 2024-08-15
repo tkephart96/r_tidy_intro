@@ -1,0 +1,143 @@
+---
+title: "Relational Data Assignment"
+author: "Tyler Kephart"
+date: "2024-08-15"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##### Required Libraries
+
+```{r libraries}
+library(tidyverse)
+```
+
+##### Question 1.
+
+Identify the primary keys in the following datasets. Be sure to show that you have the primary key by showing there are no duplicate entries.
+
+Lahman::Batting
+babynames::babynames
+nasaweather::atmos
+
+Note: I had to `install.packages("nasaweather")` to get the dataset
+
+```{r question-1-response}
+# primary key would be a combination of the following columns
+# or create a new column based on the row number to be the primary key
+Lahman::Batting %>% count(playerID, yearID, stint, teamID) %>% filter(n > 1)
+# again primary key would be a combo of the following or create from row numbers
+babynames::babynames %>% count(year, sex, name, n) %>% filter(nn > 1)
+# again primary key would be a combo of the following or create from row numbers
+nasaweather::atmos %>% count(lat, long, year, month) %>% filter(n > 1)
+```
+
+##### Question 2.
+
+What is the relationship between the "Batting", ~~"Master"~~ "People", and "Salaries" tables in the "Lahman" package? What are the keys for each dataset and how do they relate to each other?
+
+```{r question-2-response}
+# we already got the primary key combo for Lahman::Batting in question 1
+# Lahman::Batting key combo is playerID, yearID, stint, and teamID
+# Lahman::People primary key is playerID
+Lahman::People %>% count(playerID) %>% filter(n > 1)
+# Lahman::Salaries key combo is yearID, teamID, and playerID
+Lahman::Salaries %>% count(yearID, teamID, playerID) %>% filter(n > 1)
+# all 3 share playerID, Salaries and Batting also share yearID and teamID
+```
+
+##### Question 3.
+
+Load the "nycflights13" library. Use an appropriate join to add a column containing the airline name to the "flights" dataset present in the library. Be sure to put the carrier code and name in the first two columns of the result so we can see them. Save the result as "flights2".
+
+```{r question-3-response}
+# loading nycflights13
+library(nycflights13)
+# join airlines to flights to add airline name
+flights2 <- flights %>% 
+            left_join(airlines, "carrier") %>% 
+            # put carrier code and airline name first to confirm
+            select(carrier, airline_name = name, everything())
+flights2
+```
+
+##### Question 4.
+
+Use an appropriate join to add the airport name to the "flights2" dataset you got above. The codes and names of the airports are in the "airports" dataset of the "nycflights13" package. Put the carrier and carrier name first followed by the destination and destination name, then everything else.
+
+```{r question-4-response}
+# left join flights2 with airports
+flights2 %>% 
+    left_join(
+        # selecting only faa and name cuz that's all we need for now
+        select(airports, faa, dest_name = name), 
+        # join where dest equals faa
+        c("dest" = "faa")
+        ) %>% 
+    # bring carrier, airline_name, dest, and dest_name up front
+    select(carrier, airline_name, dest, dest_name, everything())
+```
+
+##### Question 5.
+
+The "nycflights13" library and the code to create spatial map is provided for you. Now compute the average delay by destination, then join on the airports dataframe so you can show the spatial distribution of delays.
+
+* Use the size or colour of the points to display the average delay for each airport.
+* Add the location of the origin and destination (i.e. the lat and lon) to flights.
+* Compute the average delay by destination.
+
+Use the textbook for reference.
+```{r question-5-response}
+# provided code
+library(nycflights13)
+
+airports %>%
+  semi_join(flights, c("faa" = "dest")) %>%
+  ggplot(aes(lon, lat)) +
+    borders("state") +
+    geom_point() +
+    coord_quickmap()
+# my code
+# average delays per airport
+delays <- flights %>% 
+            # selecting and renaming origin code and dep delays
+            select(faa = origin, delay = dep_delay) %>% 
+            # selecting and renaming destination code and arr delays
+            # unioned together to make grouping easier
+            union(select(flights, faa = dest, delay = arr_delay)) %>% 
+            # grouped together the origin and destination codes
+            group_by(faa) %>% 
+            # getting the average delays and excluding NA
+            summarise(avg_delay = mean(delay, na.rm = TRUE))
+# here is a look at the delays numerically
+delays
+# here is a look at the delays graphically
+airports %>%
+    # same semi join as provided earlier to filter to same airports in both sets
+    semi_join(flights, c("faa" = "dest")) %>% 
+    # left joining to delays to get the average delays per airport
+    left_join(delays, "faa") %>%
+    # plotting aesthetics, alpha added to see clustered airports better
+    # size of points going off of avg delays
+    ggplot(aes(lon, lat, size = avg_delay, alpha = .1)) +
+    borders("state") +
+    geom_point() +
+    coord_quickmap()
+```
+
+##### Question 6.
+
+Use a set operation function to find which airport codes from flights are not in the airports dataset.
+
+```{r question-6-response}
+# find airport codes from flights not in airports
+flights %>% 
+    anti_join(airports, c("dest" = "faa")) %>%
+    select(dest) %>%
+    unique()
+# I did not see any unique airport codes not found in airports from origin
+```
+
+
