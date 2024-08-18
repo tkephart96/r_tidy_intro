@@ -1,0 +1,138 @@
+---
+title: "Categorial Variables and Factors Assignment"
+author: "Tyler Kephart"
+date: "2024-08-18"
+output: pdf_document
+geometry: "margin=1.5cm"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loaded libraries
+
+```{r libraries}
+library(tidyverse)
+```
+
+### 1. From the "forcats" library load gss_cat data. Explore the distribution of rincome (reported income). What makes the default bar chart hard to understand? How could you improve the plot?
+
+```{r question-1-response}
+# default bar chart of rincome
+gss_cat %>% 
+    ggplot(aes(x = rincome)) +
+    geom_bar() +
+    labs(x = "Reported Income",
+         y = "Count")
+
+# The default bar chart can be hard to understand due to:
+# - overlapping labels
+# - order of categories
+
+# improved plot
+gss_cat %>% 
+    # reorder categories by frequency
+    ggplot(aes(x = fct_infreq(rincome))) +
+    geom_bar() +
+    labs(x = "Reported Income",
+         y = "Count") +
+    # angle x variable names for readability
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### 2. What is the most common religion? What is the most common partyid?
+
+```{r question-2-response}
+# most common religion
+gss_cat %>%
+    count(relig) %>%
+    arrange(desc(n)) %>%
+    slice(1)
+# most common partyid
+gss_cat %>%
+    count(partyid) %>%
+    arrange(desc(n)) %>%
+    slice(1)
+```
+
+### 3. Which relig does denom (denomination) apply to? How can you find out with a table? How can you find out with a visualisation?
+
+```{r question-3-response}
+# summary table of denominations per religion
+gss_cat %>%
+    group_by(relig) %>%
+    # counts distinct denominations for each religion
+    summarise(count_denom = n_distinct(denom)) %>%
+    arrange(desc(count_denom))
+# plot of denominations per religion
+gss_cat %>%
+    group_by(relig) %>%
+    # counts distinct denominations for each religion
+    summarise(count_denom = n_distinct(denom)) %>%
+    ggplot(aes(
+            # orders religions by number of denominations
+            x = reorder(relig, count_denom), 
+            y = count_denom)) +
+        # bar chart with height of bars being the number of denominations
+        geom_col() +
+        # flip the axes to make the plot easier to read
+        coord_flip() +
+        labs(x = "Religion",
+            y = "Denominations")
+```
+
+### 4. How have the proportions of people identifying as Democrat, Republican, and Independent changed over time? Plot a suitable chart.
+
+```{r question-4-response}
+# categorize partyid into Independent, Democrat, Republican, and Other
+gss_cat <- gss_cat %>%
+    mutate(parties = case_when(
+        partyid %in% c(
+            "Ind,near rep","Independent","Ind,near dem") ~ "Independent",
+        partyid %in% c(
+            "Not str democrat","Strong democrat") ~ "Democrat",
+        partyid %in% c(
+            "Not str republican","Strong republican") ~ "Republican",
+        # catch-all for any unspecified categories
+        TRUE ~ "Other"),
+    .after = partyid)
+# summarize the proportions of parties by year
+party_proportions <- gss_cat %>%
+    group_by(year, parties) %>%
+    summarise(count = n()) %>%
+    group_by(year) %>%
+    mutate(total = sum(count),
+            proportion = count / total) %>%
+    ungroup()
+# plot the proportions of parties over time
+party_proportions %>% 
+    # only looking at democrat, republican, and independent, filter out others
+    filter(parties != "Other") %>%
+    ggplot(aes(x = year, y = proportion, color = parties)) +
+        geom_line() +
+        geom_point() +
+        labs(x = "Year", y = "Proportion", color = "Party") +
+        # make colors to match party colors
+        scale_color_manual(values = c(
+                            "Democrat" = "blue", 
+                            "Republican" = "red", 
+                            "Independent" = "black"))
+```
+
+### 5. Collapse "rincome" into smaller set of categories?
+
+```{r question-5-response}
+# define income ranges and collapse rincome into broader categories
+gss_cat %>%
+  mutate(income_cat = case_when(
+    rincome %in% c("Lt $1000") ~ "Low Income",
+    rincome %in% c("$1000 to 2999") ~ "Lower Middle Income",
+    rincome %in% c("$3000 to 3999", "$4000 to 4999") ~ "Middle Income",
+    rincome %in% c("$5000 to 5999", "$6000 to 6999") ~ "Upper Middle Income",
+    rincome %in% c("$7000 to 7999", "$8000 to 9999") ~ "High Income",
+    rincome %in% c("$10000 - 14999", "$15000 - 19999") ~ "Very High Income",
+    rincome %in% c("$20000 - 24999", "$25000 or more") ~ "Top Income",
+    TRUE ~ "Unknown"),
+    .after = rincome)
+```
