@@ -243,7 +243,8 @@ Create a visualization to compare the seven-day average cases and deaths per 100
 
 ```{r p1q5-response}
 # compare 7-day average cases and deaths per 100k people
-daily_7day_avg_per_100k %>% filter(!is.na(delta_cases_7)) %>%
+daily_7day_avg_per_100k %>% 
+    filter(!is.na(delta_cases_7)) %>%
     ggplot(aes(x = date)) +
     geom_line(aes(y = delta_cases_7, color = "Cases"), linewidth = 1) +
     # scale for visibility
@@ -275,13 +276,20 @@ Your first task in Part 2 is to determine the top 10 states in terms of total de
 Once you have both lists, briefly describe your methodology and your results.
 
 ```{r p2q1-response}
-
-# Determine the top 10 states in terms of total deaths and cases between March 15, 2020, and December 31, 2021. To do this, transform your combined COVID-19 data to summarize total deaths and cases by state up to December 31, 2021. 
-
+# top 10 states for total deaths and cases between 2020-03-15 and 2021-12-31
+state_totals_end2021 <- us_counties %>% 
+    # just need to filter to 2021-12-31 as totals are already as of that date
+    filter(date == "2021-12-31") %>% 
+    group_by(state, date) %>% 
+    summarise(total_deaths = sum(deaths), 
+              total_cases = sum(cases)) %>% 
+    # sort totals
+    arrange(desc(total_cases), 
+            desc(total_deaths))
+state_totals_end2021
 ```
 
 ```{r p2q1-sample}
-
 # Your transformed data should look similar to the following tibble:  
 #
 # A tibble: 51 x 4
@@ -300,7 +308,7 @@ Once you have both lists, briefly describe your methodology and your results.
 # ... with 41 more rows
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+The three most populated states (California, Texas, and Florida) also had the most deaths and cases among the states.
 
 ### Question 2
 
@@ -309,13 +317,28 @@ Determine the top 10 states in terms of deaths per 100,000 people and cases per 
 Once you have both lists, briefly describe your methodology and your results. Do you expect the lists to be different than the one produced in Question 1? Which method, total or per 100,000 people, is a better method for reporting the statistics? 
 
 ```{r p2q2-response}
-
-# Determine the top 10 states in terms of deaths and cases per 100,000 people between March 15, 2020, and December 31, 2021. You should first tidy and transform the population estimates to include population totals by state. Use your relational data verbs (e.g. full_join()) to join the population estimates with the cases and death statistics using the state name as a key. Then, use case_when() and grepl() to add a population column to your table that only includes the estimated population for the associated year. Finally, mutate your table to calculate deaths and cases per 100,000 people and summarize by state. 
-
+# create population totals for the states
+state_population_totals <- us_population_estimates %>% 
+    group_by(STNAME, Year) %>% 
+    summarize(total_population = sum(Estimate))
+# join to state totals
+state_totals_end2021 %>% 
+    # add year to join on
+    mutate(year = year(date)) %>% 
+    left_join(
+        # filter to just 2021
+        filter(state_population_totals, Year == 2021), 
+        by = c("state" = "STNAME")) %>% 
+    # make _per_100k columns
+    mutate(deaths_per_100k = (total_deaths / total_population) * 100000, 
+           cases_per_100k = (total_cases / total_population) * 100000) %>% 
+    # select the needed columns
+    select(state, date, deaths_per_100k, cases_per_100k) %>% 
+    # sort totals per 100k
+    arrange(desc(cases_per_100k), desc(deaths_per_100k))
 ```
 
 ```{r p2q2-sample}
-
 # Your transformed data should look similar to the following tibble:
 #
 # A tibble: 51 x 4
@@ -334,17 +357,70 @@ Once you have both lists, briefly describe your methodology and your results. Do
 # ... with 41 more rows
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+North Dakota, Alaska, Rhode Island, South Dakota, and Wyoming are some of the least populated states in the United states and that could be why the cases per 100K people are high.
 
 ### Question 3
 
 Now, select a state and calculate the seven-day averages for new cases and deaths per 100,000 people. Once you have calculated the averages, create a visualization using ggplot2 to represent the data. 
 
 ```{r p2q3-response}
-
-# Select a state and then filter by state and date range your data from Question 1. Calculate the seven-day average following the same procedure as Part 1. 
-
-
+# Colorado case and death totals from 2020-03-15 to 2021-12-31 per 100k people
+colorado_7day_avg <- us_counties %>% 
+    # filter dates
+    filter(between(date, as.Date("2020-03-15"), as.Date("2021-12-31")), 
+           state == "Colorado") %>% 
+    group_by(state, date) %>% 
+    # sum up deaths and cases
+    summarise(total_deaths = sum(deaths), 
+              total_cases = sum(cases)) %>% 
+    # add tear to join on
+    mutate(year = year(date)) %>% 
+    left_join(
+        # filter to just Colorado and join on year
+        filter(state_population_totals, STNAME == "Colorado"), 
+        by = c("year" = "Year")) %>% 
+    mutate(
+        # create 1-day deltas to create 7-day averages
+        delta_deaths_1 = total_deaths - lag(total_deaths), 
+        delta_cases_1 = total_cases - lag(total_cases), 
+        # create the per 100k metrics
+        deaths_per_100k = (total_deaths / total_population) * 100000, 
+        cases_per_100k = (total_cases / total_population) * 100000, 
+        # re-use function for 7-day rolling average
+        deaths_7_day = calculate_rolling_average((delta_deaths_1 / total_population) * 100000, 7), 
+        cases_7_day = calculate_rolling_average((delta_cases_1 / total_population) * 100000, 7), 
+        # shorten name of column
+        population = total_population) %>% 
+    # grab only the needed columns
+    select(state, 
+           date, 
+           total_deaths, 
+           total_cases, 
+           population, 
+           deaths_per_100k, 
+           cases_per_100k, 
+           deaths_7_day, 
+           cases_7_day)
+colorado_7day_avg
+# plot the 7-day average
+colorado_7day_avg %>% 
+    filter(!is.na(cases_7_day)) %>%
+    ggplot(aes(x = date)) +
+    geom_line(aes(y = cases_7_day, color = "Cases"), linewidth = 1) +
+    # scale for visibility
+    geom_line(aes(y = deaths_7_day * 100, color = "Deaths"), linewidth = 1) +
+    # set up y axis for 2 variables
+    scale_y_continuous(name = "Cases 7-Day Average Per 100k",
+                       # add second axis for deaths
+                       sec.axis = sec_axis(~./100, name = "Deaths 7-Day Average Per 100k")) +
+    # color the y axis titles to match the plotted lines
+    theme(axis.title.y.left = element_text(color = "blue"),
+          axis.title.y.right = element_text(color = "red")) +
+    labs(title = "Colorado 7-Day Average of Cases and Deaths per 100,000 People",
+         x = "Date") +
+    # remove legend name
+    theme(legend.position = "none") +
+    scale_color_manual(values = c("Cases" = "blue", "Deaths" = "red"))
 ```
 
 ```{r p2q3-sample}
@@ -367,20 +443,51 @@ Now, select a state and calculate the seven-day averages for new cases and death
 # … with 646 more rows
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+Looks like a lot of cases and deaths around the winter holidays at the end of 2021 and 2022 in Colorado.
 
 ### Question 4
 
 Using the same state, identify the top 5 counties in terms of deaths and cases per 100,000 people. 
 
 ```{r p2q4-response}
+# get totals for each Colorado county
+colorado_county_totals <- us_counties %>% 
+    # filter dates (sample below has 2021-12-20 so I'm filtering to that)
+    filter(date == as.Date("2021-12-20"), 
+           state == "Colorado") %>%
+    # need fips in case of duplicate county names
+    group_by(county, date, fips) %>%
+    select(county, date, fips, deaths, cases)
+# most deaths
+colorado_county_totals %>% arrange(desc(deaths))
+# most cases
+colorado_county_totals %>% arrange(desc(cases))
 
-# Using the same state as Question 2, filter your state and date range from the combined data set from Part 1 and summarize cases and deaths. Produce two lists arranged by deaths and cases. When transforming the data, be sure to include the "fips" column as you will need this to complete Question 5. 
+# samples below don't account for per 100k people 
+# so I don't know why the question asks for it
+# but here is how the data would look like per 100k people
 
+# create Colorado counties population tibble
+co_counties_population2021 <- us_population_estimates %>% 
+    filter(Year == 2021, STNAME == "Colorado") %>%
+    mutate(CTYNAME = gsub(" County", "", CTYNAME))
+# per 100k Colorado county totals
+colorado_county_totals_per_100k <- colorado_county_totals %>% 
+    # join to population tibble on county names
+    left_join(co_counties_population2021, by = c("county" = "CTYNAME")) %>%
+    # get per 100k columns
+    mutate(deaths_per_100k = (deaths / Estimate) * 100000,
+           cases_per_100k = (cases / Estimate) * 100000, 
+           fips = fips.x) %>%
+    # select columns we want
+    select(county, date, fips, deaths_per_100k, cases_per_100k)
+# most deaths per 100k
+colorado_county_totals_per_100k %>% arrange(desc(deaths_per_100k))
+# most cases per 100k
+colorado_county_totals_per_100k %>% arrange(desc(cases_per_100k))
 ```
 
 ```{r p2q4-sample}
-
 # Your transformed data should be similar to the following tibbles: 
 #
 # Arranged by deaths: 
@@ -417,14 +524,33 @@ Using the same state, identify the top 5 counties in terms of deaths and cases p
 # … with 54 more rows
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+Arapahoe county had more cases and less deaths than both Jefferson and Adams counties. However, when actually looking at the per 100k people data, we can see counties that are not in the sample lists.
 
 ### Question 5
 
 Modify the code below for the map projection to plot county-level deaths and cases per 100,000 people for your state. 
 
 ```{r p2q5-response}
-
+# plot deaths per 100k per county in Colorado
+plot_usmap(regions = "county", 
+           include="CO", 
+           data = colorado_county_totals_per_100k, 
+           values = "deaths_per_100k", 
+           color = "red") +
+    scale_fill_continuous(low = "white", 
+                          high = "red", 
+                          name = "Deaths per 100k") +
+    theme(legend.position = "top")
+# plot cases per 100k per county in Colorado
+plot_usmap(regions = "county", 
+           include="CO", 
+           data = colorado_county_totals_per_100k, 
+           values = "cases_per_100k", 
+           color = "blue") +
+    scale_fill_continuous(low = "white", 
+                          high = "blue", 
+                          name = "Cases per 100k") +
+    theme(legend.position = "top")
 ```
 
 ```{r p2q5-sample}
@@ -439,12 +565,11 @@ Modify the code below for the map projection to plot county-level deaths and cas
 #
 # Reference the plot_usmap documentation for further information using ?plot_usmap
 
-#plot_usmap(regions = "county", include="CO", data = colorado_county, values = "total_deaths", color = "blue") +
-#  scale_fill_continuous(low = "white", high = "blue", name = "Deaths per 100,000")
-
+# plot_usmap(regions = "county", include="CO", data = colorado_county, values = "total_deaths", color = "blue") +
+#   scale_fill_continuous(low = "white", high = "blue", name = "Deaths per 100,000")
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+It can be seen that the deaths and cases per 100k people is high for counties that are not as populous as major metros like El Paso county.
 
 ### Question 6
 
@@ -452,20 +577,95 @@ Finally, select three other states and calculate the seven-day averages for new 
 
 
 ```{r p2q6-response}
-
+# create a function so that I'm not copy/pasting too much
+state_7day_avg <- function(us_state) {
+    us_counties %>% 
+    # filter dates
+    filter(between(date, as.Date("2020-03-15"), as.Date("2021-12-31")), 
+           state == us_state) %>% 
+    group_by(state, date) %>% 
+    # sum up deaths and cases
+    summarise(total_deaths = sum(deaths), 
+              total_cases = sum(cases)) %>% 
+    # add tear to join on
+    mutate(year = year(date)) %>% 
+    left_join(
+        # filter to just Colorado and join on year
+        filter(state_population_totals, STNAME == us_state), 
+        by = c("year" = "Year")) %>% 
+    mutate(
+        # create 1-day deltas to create 7-day averages
+        delta_deaths_1 = total_deaths - lag(total_deaths), 
+        delta_cases_1 = total_cases - lag(total_cases), 
+        # create the per 100k metrics
+        deaths_per_100k = (total_deaths / total_population) * 100000, 
+        cases_per_100k = (total_cases / total_population) * 100000, 
+        # re-use function for 7-day rolling average
+        deaths_7_day = calculate_rolling_average((delta_deaths_1 / total_population) * 100000, 7), 
+        cases_7_day = calculate_rolling_average((delta_cases_1 / total_population) * 100000, 7), 
+        # shorten name of column
+        population = total_population) %>% 
+    # grab only the needed columns
+    select(state, 
+           date, 
+           total_deaths, 
+           total_cases, 
+           population, 
+           deaths_per_100k, 
+           cases_per_100k, 
+           deaths_7_day, 
+           cases_7_day)
+}
+# California 7-day average
+state_7day_avg("California")
+# Oregon 7-day average
+state_7day_avg("Oregon")
+# Washington 7-day average
+state_7day_avg("Washington")
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+Creating a function from the code I used originally for Colorado (refer to Question 3) made things quick and easy.
 
 ### Question 7
 
 Create a visualization comparing the seven-day averages for new deaths and cases per 100,000 people for the four states you selected. 
 
 ```{r p2q7-response}
-
+# functions for the win
+plot_state_7day_avg <- function(us_state) {
+    # reusing function from Question 6
+    state_7day_avg(us_state) %>% 
+    filter(!is.na(cases_7_day)) %>%
+    ggplot(aes(x = date)) +
+    geom_line(aes(y = cases_7_day, color = "Cases"), linewidth = 1) +
+    # scale for visibility
+    geom_line(aes(y = deaths_7_day * 100, color = "Deaths"), linewidth = 1) +
+    # set up y axis for 2 variables
+    scale_y_continuous(name = "Cases 7-Day Average Per 100k",
+                       # add second axis for deaths
+                       sec.axis = sec_axis(~./100, name = "Deaths 7-Day Average Per 100k")) +
+    # color the y axis titles to match the plotted lines
+    theme(axis.title.y.left = element_text(color = "blue"),
+          axis.title.y.right = element_text(color = "red")) +
+    labs(title = paste(us_state, "7-Day Average of Cases and Deaths per 100,000 People"),
+         x = "Date") +
+    # remove legend name
+    theme(legend.position = "none") +
+    scale_color_manual(values = c("Cases" = "blue", "Deaths" = "red"))
+}
+# it says four states even though Question 6 said 3, 
+# so I'll add another state besides Colorado as it was done in Question 3
+# California
+plot_state_7day_avg("California")
+# Oregon
+plot_state_7day_avg("Oregon")
+# Washington
+plot_state_7day_avg("Washington")
+# Ohio
+plot_state_7day_avg("Ohio")
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+Functions really help a lot and the plots give a good visual to see the differences in cases and deaths for each of the states.
 
 ## Part 3 - Global Comparison
 
