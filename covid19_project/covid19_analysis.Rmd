@@ -669,37 +669,103 @@ Functions really help a lot and the plots give a good visual to see the differen
 
 ## Part 3 - Global Comparison
 
-```{r import-csse}
+```{r import-csse, warning=FALSE, message=FALSE}
 # Import global COVID-19 statistics aggregated by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University.
 # Import global population estimates from the World Bank.
 
-#csse_global_deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
-#csse_global_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
-#csse_us_deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
-#csse_us_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+csse_global_deaths <- read_csv(
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+csse_global_cases <- read_csv(
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+csse_us_deaths <- read_csv(
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
+csse_us_cases <- read_csv(
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
 
-#global_population_estimates <- read_csv("global_population_estimates.csv")
+global_population_estimates <- read_csv("global_population_estimates.csv")
 ```
 
 ### Question 1
 
-Using the state you selected in Part 2 Question 2 compare the daily number of cases and deaths reported from the CSSE and NY Times. 
+Using the state you selected in Part 2 Question 3 compare the daily number of cases and deaths reported from the CSSE and NY Times. 
 
 ```{r p3q1-response}
-
-# To compare your state data between the two data sets, you will first need to tidy the US CSSE death and cases data.
-# Hint: Review the documentation for pivot_longer().
-
-
-# Once you have tidied your data, join the two CSSE US data sets to include cases and deaths in one table. 
-
-
-# Finally, create two visualizations with one plotting the CSSE and NY Times cases and the other plotting the CSEE and NY Times deaths.
-
+# Colorado NY Times data
+nyt_colorado <- us_counties %>% 
+    # filter dates
+    filter(between(date, as.Date("2020-03-15"), as.Date("2021-12-31")), 
+           state == "Colorado") %>% 
+    arrange(county) %>% 
+    select(fips, county, state, date, cases, deaths)
+# US CSSE cases data
+csse_us_c <- csse_us_cases %>% 
+    # remove unused columns
+    select(-(UID:code3), -(Country_Region:Combined_Key)) %>% 
+    # pivot data for a column of dates and column of case numbers
+    pivot_longer(contains('/'), names_to = "date", values_to = "cases") %>% 
+    # rename for readability
+    rename(fips = FIPS, county = Admin2, state = Province_State)
+# US CSSE death data
+csse_us_d <- csse_us_deaths %>% 
+    # remove unused columns
+    select(-(UID:code3), -(Country_Region:Population)) %>% 
+    # pivot data for a column of dates and column of death numbers
+    pivot_longer(contains('/'), names_to = "date", values_to = "deaths") %>% 
+    # rename for readability
+    rename(fips = FIPS, county = Admin2, state = Province_State)
+# Colorado CSSE death and cases data
+csse_colorado <- full_join(
+    csse_us_c, 
+    csse_us_d, 
+    by = join_by(fips, county, state, date)) %>% 
+    # make date a date type
+    mutate(date = as.Date(date, "%m/%d/%y")) %>% 
+    # just need Colorado data from 2020-03-15 and 2021-12-31
+    filter(state == "Colorado", 
+           between(date, as.Date("2020-03-15"), as.Date("2021-12-31")))
+csse_colorado
+# get NY Times Colorado daily totals
+nyt_colorado_totals <- nyt_colorado %>% 
+    group_by(state, date) %>% 
+    # sum up deaths and cases
+    summarise(total_deaths = sum(deaths), 
+              total_cases = sum(cases))
+# get CSSE Colorado daily totals
+csse_colorado_totals <- csse_colorado %>% 
+    group_by(state, date) %>% 
+    # sum up deaths and cases
+    summarise(total_deaths = sum(deaths), 
+              total_cases = sum(cases))
+# full join to keep all observations from each to compare
+colorado_totals <- full_join(nyt_colorado_totals, 
+                             csse_colorado_totals, 
+                             by = join_by(state, date),
+                             suffix = c("_nyt", "_csse"))
+# compare cases
+colorado_totals %>%
+    ggplot(aes(x = date)) +
+    geom_line(aes(y = total_cases_nyt, color = "NYT Cases"), linewidth = 1) +
+    geom_line(aes(y = total_cases_csse, color = "CSSE Cases"), linewidth = 1) +
+    labs(title = "Colorado Cases from NYT and CSSE",
+         x = "Date",
+         y = "Cases") + 
+    theme(legend.title = element_blank(), 
+          legend.position = "inside", 
+          legend.position.inside = c(.15, .85))
+# compare deaths
+colorado_totals %>%
+    ggplot(aes(x = date)) +
+    geom_line(aes(y = total_deaths_nyt, color = "NYT Deaths"), linewidth = 1) +
+    geom_line(aes(y = total_deaths_csse, color = "CSSE Deaths"), linewidth = 1) +
+    labs(title = "Colorado Deaths from NYT and CSSE",
+         x = "Date",
+         y = "Deaths") + 
+    theme(legend.title = element_blank(), 
+          legend.position = "inside", 
+          legend.position.inside = c(.15, .85))
 ```
 
 ```{r p3q1-sample}
-
 # Your tidied CSSE data for your selected state should look similar to the following tibble:
 #
 # A tibble: 43,362 × 6
@@ -716,41 +782,187 @@ Using the state you selected in Part 2 Question 2 compare the daily number of ca
 #  9  8001  Adams  Colorado   2020-03-23    25      0
 # 10  8001  Adams  Colorado   2020-03-24    27      0
 # … with 43,352 more rows
-
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+There seems to be some variation in the data for cases and deaths in Colorado from NY Times and CSSE but look to be very similar.
 
 ### Question 2 
 
 Now that you have verified the data reported from the CSSE and NY Times are similar, combine the global and US CSSE data sets and identify the top 10 countries in terms of deaths and cases per 100,000 people between March 15, 2020, and December 31, 2021.
 
-```{r p3q2-response}
-
-# First, combine and tidy the CSSE death and cases data sets. You may wish to keep the two sets separate.
-# Then, tidy the global population estimates. While tidying your data, remember to include columns that you will be able to use when joining the COVID-19 data. 
-# You will notice that the population estimates data does not include every country reported in the CSSE data. When calculating statistics per 100,000 people, you will need to filter the CSSE data to only include countries that you have population estimates for. 
-
+```{r p3q2-response, warning=FALSE, message=FALSE}
+# global daily cases
+csse_global_daily_cases <- csse_global_cases %>% 
+    # remove unused columns
+    select(-(Lat:Long)) %>% 
+    # rename to make pivot easier
+    rename(province_state = `Province/State`, country_region = `Country/Region`) %>%
+    # pivot data for a column of dates and column of case numbers
+    pivot_longer(contains('/'), names_to = "date", values_to = "cases") %>%
+    # make date a date type
+    mutate(date = as.Date(date, "%m/%d/%y")) %>%
+    # get country totals by grouping and summing up province/states
+    group_by(country_region, date) %>%
+    summarise(daily_cases = sum(cases)) %>%
+    # filter date like the others 2020-03-15 to 2021-12-31
+    filter(between(date, as.Date("2020-03-15"), as.Date("2021-12-31")))
+# global daily deaths
+csse_global_daily_deaths <- csse_global_deaths %>% 
+    # remove unused columns
+    select(-(Lat:Long)) %>% 
+    # rename to make pivot easier
+    rename(province_state = `Province/State`, country_region = `Country/Region`) %>%
+    # pivot data for a column of dates and column of death numbers
+    pivot_longer(contains('/'), names_to = "date", values_to = "deaths") %>%
+    # make date a date type
+    mutate(date = as.Date(date, "%m/%d/%y")) %>%
+    # get country totals by grouping and summing up province/states
+    group_by(country_region, date) %>%
+    summarise(daily_deaths = sum(deaths)) %>%
+    # filter date like the others 2020-03-15 to 2021-12-31
+    filter(between(date, as.Date("2020-03-15"), as.Date("2021-12-31")))
+# join together
+csse_global_totals <- full_join(csse_global_daily_cases,
+                               csse_global_daily_deaths,
+                               by = join_by("country_region", "date")) %>% 
+    mutate(year = year(date)) %>% 
+    group_by(country_region, year) %>% 
+    summarise(total_cases = max(daily_cases), 
+              total_deaths = max(daily_deaths))
+# csse global already has US cases so I don't need to join them with csse_us
+# pivot the years and population
+global_pop_est <- global_population_estimates %>% 
+    # rename to make pivot easier
+    rename(country = `Country Name`, `2020` = `2020 [YR2020]`, `2021` = `2021 [YR2021]`) %>% 
+    pivot_longer(starts_with("2"), 
+                 names_to = "year", 
+                 values_to = "population") %>% 
+    # make year numeric
+    mutate(year = as.numeric(year),
+           population = as.numeric(population)) %>% 
+    # get what we need
+    select(country, year, population)
+# global totals per 100k
+csse_global_totals_per_100k <- csse_global_totals %>% 
+    # group on country
+    group_by(country_region) %>% 
+    # get totals for each country
+    summarise(total_cases = sum(total_cases), 
+              total_deaths = sum(total_deaths)) %>%
+    # inner join to only get countries that have data in both datasets
+    inner_join(
+        select(
+            filter(global_pop_est, year == 2021), -year), 
+                   by = c("country_region" = "country")) %>% 
+    # calculate per 100k
+    mutate(cases_per_100k = (total_cases / population) * 100000, 
+           deaths_per_100k = (total_deaths / population) * 100000)
+# top 10 countries for deaths per 100k
+csse_global_totals_per_100k %>% 
+    arrange(desc(deaths_per_100k)) %>% 
+    select(country_region, cases_per_100k, deaths_per_100k) %>%
+    head(10)
+# top 10 countries for cases per 100k
+csse_global_totals_per_100k %>% 
+    arrange(desc(cases_per_100k)) %>% 
+    select(country_region, cases_per_100k, deaths_per_100k) %>%
+    head(10)
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+I used an inner join so that I only list the countries the I have data on.
 
 ### Question 3
 
 Construct a visualization plotting the 10 countries in terms of deaths and cases per 100,000 people between March 15, 2020, and December 31, 2021. In designing your visualization keep the number of data you will be plotting in mind. You may wish to create two separate visualizations, one for deaths and another for cases. 
 
 ```{r p3q3-response}
-
+# top 10 countries for deaths per 100k
+csse_global_totals_per_100k %>% 
+    # get top 10
+    arrange(desc(deaths_per_100k)) %>% 
+    head(10) %>% 
+    # plot deaths per 100k top 10
+    ggplot(aes(x = deaths_per_100k, y = fct_reorder(country_region, deaths_per_100k))) +
+    geom_col() +
+    labs(title = "Top 10 Countries with the Most Deaths per 100k",
+         x = "Deaths per 100k",
+         y = "Country")
+# top 10 countries for cases per 100k
+csse_global_totals_per_100k %>% 
+    # get top 10
+    arrange(desc(cases_per_100k)) %>% 
+    head(10) %>% 
+    # plot cases per 100k top 10
+    ggplot(aes(x = cases_per_100k, y = fct_reorder(country_region, cases_per_100k))) +
+    geom_col() +
+    labs(title = "Top 10 Countries with the Most Cases per 100k",
+         x = "Cases per 100k",
+         y = "Country")
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+I used fct_reorder so that the countries would be ordered from most to least when they were plotted. 
 
 ### Question 4
 
 Finally, select four countries from one continent and create visualizations for the daily number of confirmed cases per 100,000 and the daily number of deaths per 100,000 people between March 15, 2020, and December 31, 2021. 
 
 ```{r p3q4-response}
-
+# csse global daily
+csse_global_daily <- full_join(csse_global_daily_cases,
+                               csse_global_daily_deaths,
+                               by = join_by("country_region", "date"))
+# replace US with United States
+csse_global_daily$country_region <- replace(
+    csse_global_daily$country_region, 
+    csse_global_daily$country_region == "US", 
+    "United States")
+# get daily numbers for 4 north american countries
+csse_n_america_daily <- csse_global_daily %>% 
+    # filter to 4 north american countries
+    filter(country_region %in% c("Canada", "United States", "Mexico", "Cuba")) %>%
+    # add year for joining
+    mutate(year = year(date)) %>% 
+    # inner join to have data from both
+    inner_join(global_pop_est, 
+               by = join_by("country_region" == "country", "year")) %>% 
+    # get per 100k
+    # create 1-day deltas for new daily cases/deaths
+    mutate(new_cases = daily_cases - lag(daily_cases),
+           new_deaths = daily_deaths - lag(daily_deaths),
+           cases_per_100k = (new_cases / population) * 100000, 
+           deaths_per_100k = (new_deaths / population) * 100000) %>% 
+    # get columns we need
+    select(country_region, date, cases_per_100k, deaths_per_100k)
+# plot daily cases
+csse_n_america_daily %>%
+    # remove na
+    filter(!is.na(cases_per_100k)) %>%
+    # set date as x
+    ggplot(aes(x = date)) +
+    # plot cases, color on country
+    geom_line(aes(y = cases_per_100k, color = country_region), linewidth = 1) +
+    labs(title = "North American Daily Cases per 100k",
+         x = "Date",
+         y = "Cases per 100k") + 
+    # move legend and remove legend title
+    theme(legend.title = element_blank(), 
+          legend.position = "inside", 
+          legend.position.inside = c(.15, .85))
+# plot daily deaths
+csse_n_america_daily %>%
+    # remove na
+    filter(!is.na(deaths_per_100k)) %>%
+    # set date as x
+    ggplot(aes(x = date)) +
+    # plot deaths, color on country
+    geom_line(aes(y = deaths_per_100k, color = country_region), linewidth = 1) +
+    labs(title = "North American Daily Deaths per 100k",
+         x = "Date",
+         y = "Deaths per 100k") + 
+    # move legend and remove legend title
+    theme(legend.title = element_blank(), 
+          legend.position = "inside", 
+          legend.position.inside = c(.15, .85))
 ```
 
--- Communicate your methodology, results, and interpretation here -- 
+A rolling 7-day average would probably work better for these visuals but the question asked for daily cases and deaths. Unless the question was asking for total cases and deaths as time went on, then the question could have been worded better.
